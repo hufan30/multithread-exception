@@ -4,14 +4,13 @@ import com.google.common.collect.Lists;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MultiThreadServiceDataProcessor {
     // 线程数量
     private final int threadNumber;
     // 处理数据的远程服务
     private final RemoteService remoteService;
-
-    private volatile Boolean flag = true;
 
     public MultiThreadServiceDataProcessor(int threadNumber, RemoteService remoteService) {
         this.threadNumber = threadNumber;
@@ -29,12 +28,15 @@ public class MultiThreadServiceDataProcessor {
 
         try {
             List<Thread> threads = new ArrayList<>();
+            AtomicBoolean flag = new AtomicBoolean(true);
             for (List<Object> dataGroup : dataGroups) {
                 Thread thread = new Thread(() -> {
                     try {
                         dataGroup.forEach(remoteService::processData);
                     } catch (Exception e) {
-                        flag = false;
+                        flag.set(false);
+//                        throw new RuntimeException(e);   //虽然是throw到自己线程中，但是能知道是哪个线程，thread-10出现异常，强烈推荐此方式，养成习惯；
+                        e.printStackTrace();   //单纯打印异常是没法知道是哪个线程抛出的
                     }
                 });
                 thread.start();
@@ -44,9 +46,10 @@ public class MultiThreadServiceDataProcessor {
             for (Thread thread : threads) {
                 thread.join();
             }
-            return flag;
+            return flag.get();
         } catch (Exception e) {
-            return flag;
+            return false;
+//            throw new RuntimeException(e);
         }
     }
 }
